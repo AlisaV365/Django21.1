@@ -1,0 +1,21 @@
+{% extends 'catalog/base.html' %}
+{% load my_tags %}
+{% load static %}
+
+{% block content %}
+    <div class="row">
+        <div class="col-12 mb-0">
+        {% for object in object_list %}
+            {% include 'catalog/includes/inc_category.html' %}
+            <div class="btn-group">
+                {% if object.pk %}
+                    <a href="{% url 'catalog:product_detail' object.pk %}">
+                        <button type="button" class="btn btn-sm btn-outline-secondary">смотреть тут</button>
+                    </a>
+                {% endif %}
+            </div>
+        {% endfor %}
+        </div>
+    </div>
+{% endblock %}
+
