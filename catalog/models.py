@@ -39,4 +39,23 @@ class Product(models.Model):
         verbose_name_plural = 'продукты'
 
 
+class Version(models.Model):
+    product = models.ForeignKey(Product, related_name='version', on_delete=models.CASCADE, verbose_name='продукт')
+    version_number = models.IntegerField(verbose_name='номер версии')
+    version_name = models.CharField(max_length=350, verbose_name='название версии')
 
+    active_version = models.BooleanField(default=True)
+
+    def __str__(self):
+        return f'{self.product} - {self.version_name}'
+
+    class Meta:
+        verbose_name = 'версия'
+        verbose_name_plural = 'версии'
+
+    # @classmethod
+    # def get_active_version(cls, product):
+    #     active_version = cls.objects.filter(product=product, active_version=True).order_by('-version_number').first()
+    #     if active_version:
+    #         return f"Последняя активная версия: {active_version.version_name}, Номер: {active_version.version_number}"
+    #     return "Активная версия не найдена"
