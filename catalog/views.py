@@ -1,8 +1,8 @@
-from itertools import product
-
+from django.contrib.auth.mixins import LoginRequiredMixin
+from django.db import transaction
 from django.forms import inlineformset_factory
-from django.http import Http404, request, HttpResponse
-from django.shortcuts import get_object_or_404, redirect, render
+
+from django.shortcuts import get_object_or_404, redirect
 from django.urls import reverse_lazy, reverse
 from django.views.generic import ListView, CreateView, UpdateView, DeleteView, TemplateView, DetailView
 from pytils.translit import slugify
@@ -35,27 +35,14 @@ class CategoryListView(ListView):
         return context_data
 
 
-class ProductCreateView(CreateView):
+class ProductCreateView(LoginRequiredMixin, CreateView):
     model = Product
     form_class = ProductForm
     success_url = reverse_lazy('catalog:category')
 
-    def get_success_url(self):
-        return reverse('catalog:product', args=[self.object.category.pk])
-
     def form_valid(self, form):
-        if form.is_valid():
-            new_prod = form.save()
-            new_prod.slug = slugify(new_prod.name)
-            new_prod.save()
-
+        form.instance.owner = self.request.user
         return super().form_valid(form)
-
-    def get_context_data(self, **kwargs):
-        context_data = super().get_context_data(**kwargs)
-        VersionFormset = inlineformset_factory(Product, Version, form=VersionForm, extra=1)
-        context_data['formset'] = VersionFormset()
-        return context_data
 
 
 class ProductListView(ListView):
@@ -68,6 +55,14 @@ class ProductListView(ListView):
             queryset = queryset.filter(category_id=category_id)
         return queryset
 
+    def form_valid(self, form):
+        if form.is_valid():
+            new_prod = form.save()
+            new_prod.slug = slugify(new_prod.name)
+            new_prod.save()
+
+        return super().form_valid(form)
+
 
 class ProductDetailView(DetailView):
     model = Product
@@ -79,10 +74,9 @@ class ProductDetailView(DetailView):
         return self.object
 
 
-class ProductUpdateView(UpdateView):
+class ProductUpdateView(LoginRequiredMixin, UpdateView):
     model = Product
-    fields = (
-        'name', 'description', 'image', 'category', 'price', 'date_of_creation', 'views_count', 'is_published', 'slug')
+    form_class = ProductForm
     template_name = 'catalog/product_form.html'
 
     def get_success_url(self):
@@ -90,37 +84,30 @@ class ProductUpdateView(UpdateView):
 
     def get_context_data(self, **kwargs):
         context_data = super().get_context_data(**kwargs)
-        VersionFormset = inlineformset_factory(Product, Version, form=VersionForm, extra=1)
+        VersionFormset = inlineformset_factory(self.model, Version, form=VersionForm, extra=1)
         if self.request.method == 'POST':
-            formset = VersionFormset(self.request.POST)
+            formset = VersionFormset(self.request.POST, instance=self.object)
         else:
-            formset = VersionFormset()
-        context_data['formset'] = VersionFormset()
+            formset = VersionFormset(instance=self.object)
+        context_data['formset'] = formset
         return context_data
 
+    def form_valid(self, form):
+        context_data = self.get_context_data()
+        formset = context_data['formset']
+        with transaction.atomic():
+            self.object = form.save()
+            if formset.is_valid():
+                formset.instance = self.object
+                formset.save()
 
-class ProductDeleteView(DeleteView):
+        return super().form_valid(form)
+
+
+class ProductDeleteView(LoginRequiredMixin, DeleteView):
     model = Product
     success_url = reverse_lazy('catalog:index')
     template_name = 'catalog/blogpost_confirm_delete.html'
-
-
-class VersionCreateView(DetailView):
-    model = Version
-    form_class = VersionForm
-    fields = ('product', 'version_number', 'version_name')
-
-
-class VersionListView(ListView):
-    model = Version
-    form_class = VersionForm
-    fields = ('product', 'version_number', 'version_name')
-
-
-class VersionDetailView(DetailView):
-    model = Version
-    form_class = VersionForm
-    fields = ('product', 'version_number', 'version_name')
 
 
 def toggle_activity(request, pk):
